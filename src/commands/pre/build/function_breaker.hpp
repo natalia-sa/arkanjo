@@ -109,7 +109,7 @@ class FunctionBreaker {
      * @param on_function Callback invoked for every extracted unit
      * @param granularity Whether to break the codebase by function or by file
      */
-    void process(
+    int process(
       const fs::path& folder_path,
       std::function<void(const FunctionData&)> on_function,
       Granularity granularity = Granularity::Function);

@@ -10,6 +10,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
@@ -19,6 +23,7 @@ include(GNUInstallDirs)
 set(THIRD_PARTY_BUILD_DIR "${CMAKE_BINARY_DIR}/third-party")
 
 include(cmake/TreeSitter.cmake)
+include(cmake/Libgit2.cmake)
 include(cmake/CompilerOptions.cmake)
 include(cmake/Targets.cmake)
 

@@ -42,6 +42,8 @@ class SimilarityExplorer : public CommandBase<SimilarityExplorer> {
         {"both-match", 'b', NoArgument, "Enable both-pattern matching. By default, the pattern only needs to match one function."},
         {"sort", 's', NoArgument, "Sort results by number of duplicated lines. By default, results are sorted by the similarity metric."},
         {"cluster", 'c', NoArgument, "Print results with cluster relationships from the similarity table."},
+        {"verbose", 0, NoArgument, "Enable verbose output"},
+        {"template", 't', RequiredArgument, "Output format template used to render each result entry."},
         OPTION_END
     };
     COMMAND_DESCRIPTION(
@@ -82,6 +84,8 @@ class SimilarityExplorer : public CommandBase<SimilarityExplorer> {
     bool sorted_by_number_of_duplicated_code;          ///< Whether to sort by line count
     bool use_clusters;                                 ///< Whether clusters be printed
     int processed_results = INITIAL_PROCESSED_RESULTS; ///< Counter for processed results
+    bool mode_verbose = false;                         ///< Detailed execution information
+    std::string template_processed_results_output = TEMPLATE_PROCESSED_RESULTS;
 
     /**
      * @brief Determines number of pairs to show
@@ -117,13 +121,13 @@ class SimilarityExplorer : public CommandBase<SimilarityExplorer> {
      * @param similar_path_pairs Pairs to check
      * @return int Number of matching pairs
      */
-    int find_number_pair_found(const std::vector<std::pair<Path, Path>>& similar_path_pairs) const;
+    int find_number_pair_found(const std::vector<SimilarPair>& similar_path_pairs) const;
 
     /**
      * @brief Builds filtered path pairs
-     * @return vector<pair<Path,Path>> Filtered and sorted pairs
+     * @return vector<SimilarPair> Filtered and sorted pairs
      */
-    std::vector<std::pair<Path, Path>> build_similar_path_pairs();
+    std::vector<SimilarPair> build_similar_path_pairs();
 
     /**
      * @brief Display clusters of similar functions.

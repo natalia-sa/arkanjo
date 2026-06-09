@@ -1,6 +1,5 @@
 #include "preprocessor_build.hpp"
 #include <cassert>
-#include <iomanip>
 #include <iostream>
 #include <optional>
 
@@ -102,34 +101,36 @@ void PreprocessorBuild::preprocess(const fs::path& path, double similarity, size
 
     if (fs::exists(base_path)) {
         fs::remove_all(base_path);
+
+        if (mode_verbose)
+            fm::write("Removed existing container folder");
     }
 
     auto method = MethodsType[use_duplication_finder_index].create(
         base_path, similarity, llm_max_seq_length, llm_batch_size, llm_model);
 
     FunctionBreaker function_breaker;
-    function_breaker.process(path, [&method](const FunctionData& fd) {
+    auto size_files = function_breaker.process(path, [&method](const FunctionData& fd) {
         method->on_function(fd);
     }, granularity);
 
+    if (mode_verbose) {
+        fm::write("\tFound " + std::to_string(size_files) + " files");
+        fm::time("\tExecution time breaker:", start_breaker);
+    }
+
+    auto start_duplication = std::chrono::high_resolution_clock::now();
     fm::write(DUPLICATION_MESSAGE);
 
     method->execute();
+    if (mode_verbose)
+        fm::time("\tExecution time duplication:", start_duplication);
 
     Preprocessor::save_current_run_params(path);
 
     fm::write(END_MESSAGE);
 
-    auto end = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double, std::milli> duration = end - start;
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
-
-    std::cout << "Execution time: "
-            << std::setfill('0') << std::setw(2) << (ms / 3600000) << ":"
-            << std::setw(2) << (ms / 60000 % 60) << ":"
-            << std::setw(2) << (ms / 1000 % 60) << "."
-            << std::setw(3) << (ms % 1000)
-            << "\n";
+    fm::time("Execution time:", start);
 }
 
 PreprocessorBuild::PreprocessorBuild() { }
@@ -165,6 +166,8 @@ bool PreprocessorBuild::validate(const ParsedOptions& options) {
 }
 
 bool PreprocessorBuild::run([[maybe_unused]] const ParsedOptions& options) {
+    mode_verbose = options.args.count("verbose") > 0;
+
     fs::path base_path = Config::config().base_path / Config::config().name_container;
     auto [path, similarity, use_duplication_finder_index,
           llm_max_seq_length, llm_batch_size, llm_model, granularity] = read_parameters(options);

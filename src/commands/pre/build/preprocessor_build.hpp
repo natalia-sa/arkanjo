@@ -70,6 +70,8 @@ class PreprocessorBuild : public Preprocessor, public CommandBase<PreprocessorBu
     static constexpr const char* MESSAGE_DUPLICATION_FINDER_TYPE = "Enter the number of the duplication finder technique you want to use:";
     static constexpr const char* INVALID_CODE_DUPLICATION_FINDER = "Invalid option entered. Stopping Program...";
 
+    bool mode_verbose = false; ///< Detailed execution information
+
     const std::vector<MethodInfo> MethodsType = {
       {
         [](const std::string& base_path, float similarity,
@@ -137,6 +139,7 @@ class PreprocessorBuild : public Preprocessor, public CommandBase<PreprocessorBu
 
   public:
     static constexpr CliOption options_[] = {
+      {"verbose", 0, NoArgument, "Enable verbose output"},
       {"path", 0, PositionalArgument, "Project path to preprocess."},
       {"llm-max-seq-length", 0, RequiredArgument,
         "Override the LLM detector's max token sequence length per function "

@@ -44,17 +44,36 @@ SimilarityExplorerEntry SimilarityExplorer::process_similar_path_pair(const Path
         return {};
     }
     processed_results++;
-    
+
+    Function function1(path1);
+    function1.load();
+
+    Function function2(path2);
+    function2.load();
+
     return {
-        path1.format_path_message_in_pair(),
-        path2.format_path_message_in_pair(),
-        find_number_lines(path1)
+        .path_a = path1.format_path_message_in_pair(),
+        .path_b = path2.format_path_message_in_pair(),
+        .dir_a = path1.build_relative_path().parent_path().string(),
+        .dir_b = path2.build_relative_path().parent_path().string(),
+        .filename_a = path1.build_relative_path().filename().string(),
+        .filename_b = path2.build_relative_path().filename().string(),
+        .func_a = path1.build_function_name(),
+        .func_b = path2.build_function_name(),
+        .start_a = function1.get_scope_function_in_file()[0],
+        .start_b = function2.get_scope_function_in_file()[0],
+        .end_a = function1.get_scope_function_in_file()[2],
+        .end_b = function2.get_scope_function_in_file()[2],
+        .duplicated_lines = function1.number_of_lines()
     };
 }
 
-int SimilarityExplorer::find_number_pair_found(const std::vector<std::pair<Path, Path>>& similar_path_pairs) const {
+int SimilarityExplorer::find_number_pair_found(const std::vector<SimilarPair>& similar_path_pairs) const {
     int count = 0;
-    for (const auto& [path1, path2] : similar_path_pairs) {
+    for (const auto& similar_pair : similar_path_pairs) {
+        const Path& path1 = similarity_table->get_path(similar_pair.id1);
+        const Path& path2 = similarity_table->get_path(similar_pair.id2);
+
         if (match_pattern(path1, path2)) {
             count++;
         }
@@ -62,12 +81,12 @@ int SimilarityExplorer::find_number_pair_found(const std::vector<std::pair<Path,
     return count;
 }
 
-std::vector<std::pair<Path, Path>> SimilarityExplorer::build_similar_path_pairs() {
-    std::vector<std::pair<Path, Path>> similar_path_pairs;
+std::vector<SimilarPair> SimilarityExplorer::build_similar_path_pairs() {
+    std::vector<SimilarPair> similar_path_pairs = similarity_table->get_all_similar_pairs();
     if (sorted_by_number_of_duplicated_code) {
-        similar_path_pairs = similarity_table->get_all_similar_path_pairs_sorted_by_line_number();
+        similarity_table->sort_pairs_by_line_number(similar_path_pairs);
     } else {
-        similar_path_pairs = similarity_table->get_all_similar_path_pairs_sorted_by_similarity();
+        similarity_table->sort_pairs_by_similarity(similar_path_pairs);
     }
     return similar_path_pairs;
 }
@@ -91,7 +110,10 @@ void SimilarityExplorer::explorer_clusters() {
         std::vector<SimilarityExplorerEntry> entries{};
         for (const auto& path : info.paths) {
             entries.push_back({
-                path.format_path_message_in_pair(), "",
+                path.format_path_message_in_pair(), "", 
+                path.build_relative_path().parent_path().string(), "",
+                path.build_relative_path().filename().string(), "",
+                path.build_function_name(), "",
                 find_number_lines(path)
             });
         }
@@ -106,9 +128,21 @@ void SimilarityExplorer::explorer_clusters() {
 }
 
 void SimilarityExplorer::explorer() {
-    std::vector<std::pair<Path, Path>> similar_path_pairs = build_similar_path_pairs();
+    auto start = std::chrono::high_resolution_clock::now();
+
+    if (mode_verbose)
+        fm::write("Building pairs of similar paths...");
+
+    auto similar_path_pairs = build_similar_path_pairs();
+
+    if (mode_verbose)
+        fm::write("Finding pair of numbers found and show...");
+
     int number_pair_found = find_number_pair_found(similar_path_pairs);
     int number_pairs_show = find_number_pairs_show(number_pair_found);
+
+    if (mode_verbose)
+        fm::time("Execution time build similar path pairs:", start);
 
     fm::write(TEMPLATE_INITIAL_TEXT, SimilarityExplorerInitialMessage{
         number_pair_found, number_pairs_show
@@ -116,12 +150,15 @@ void SimilarityExplorer::explorer() {
     fm::write(Utils::LIMITER_PRINT);
 
     std::vector<SimilarityExplorerEntry> vector_entry = {};
-    for (const auto& [path1, path2] : similar_path_pairs) {
+    for (const auto& similar_pair : similar_path_pairs) {
+        const Path& path1 = similarity_table->get_path(similar_pair.id1);
+        const Path& path2 = similarity_table->get_path(similar_pair.id2);
+
         auto entry = process_similar_path_pair(path1, path2);
         if (entry.duplicated_lines < 0) continue;
         vector_entry.push_back(entry);
     }
-    fm::write(TEMPLATE_PROCESSED_RESULTS, vector_entry, Format::AUTO, [](size_t i) {
+    fm::write(template_processed_results_output, vector_entry, Format::AUTO, [](size_t i) {
         return (i % 2 == 0)
             ? fm::get_formatter()->style().at("row_even")
             : fm::get_formatter()->style().at("row_odd");
@@ -162,6 +199,10 @@ bool SimilarityExplorer::run(const ParsedOptions& options) {
     both_path_need_to_match_pattern = options.args.count("both-match") > 0;
     sorted_by_number_of_duplicated_code = options.args.count("sort") > 0;
     use_clusters = options.args.count("cluster") > 0;
+    auto it_template = options.args.find("template");
+    if (it_template != options.args.end()) {
+        template_processed_results_output = it_template->second;
+    }
 
     if (use_clusters) {
         explorer_clusters();
