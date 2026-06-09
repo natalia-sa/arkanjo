@@ -96,7 +96,7 @@ void FunctionBreaker::file_breaker(
 }
 
 // TODO: It's possible to add parallelism to this function.
-void FunctionBreaker::process(
+int FunctionBreaker::process(
     const fs::path& folder_path,
     std::function<void(const FunctionData&)> on_function,
     Granularity granularity
@@ -108,6 +108,7 @@ void FunctionBreaker::process(
 
         auto path = dirEntry.path();
         file_breaker(path, folder_path, on_function, granularity);
+        size_files++;
     }
 
     return size_files;
