@@ -9,7 +9,9 @@
 
 using fm = FormatterManager;
 
-std::tuple<std::string, double, size_t> PreprocessorBuild::read_parameters(const std::optional<ParsedOptions>& options) {
+std::tuple<std::string, double, size_t, std::optional<int>, std::optional<int>,
+           std::optional<std::string>, Granularity>
+PreprocessorBuild::read_parameters(const std::optional<ParsedOptions>& options) {
     fm::write(INITIAL_MESSAGE);
     std::string similarity_message;
     std::string path_str;
@@ -19,7 +21,7 @@ std::tuple<std::string, double, size_t> PreprocessorBuild::read_parameters(const
 
         if (!fs::exists(path_str)) {
             std::cout << ERROR_PATH_MESSAGE << "\n";
-            path_str.clear(); 
+            path_str.clear();
         }
     }
 
@@ -53,10 +55,45 @@ std::tuple<std::string, double, size_t> PreprocessorBuild::read_parameters(const
     }
     --use_duplication_finder_index;
 
-    return {path, similarity, use_duplication_finder_index};
+    std::optional<int> llm_max_seq_length;
+    std::optional<int> llm_batch_size;
+    std::optional<std::string> llm_model;
+    Granularity granularity = Granularity::Function;
+    if (options) {
+        auto it = options->args.find("llm-max-seq-length");
+        if (it != options->args.end()) {
+            llm_max_seq_length = std::stoi(it->second);
+        }
+        it = options->args.find("llm-batch-size");
+        if (it != options->args.end()) {
+            llm_batch_size = std::stoi(it->second);
+        }
+        it = options->args.find("llm-model");
+        if (it != options->args.end()) {
+            llm_model = it->second;
+        }
+        it = options->args.find("granularity");
+        if (it != options->args.end()) {
+            if (it->second == "file") {
+                granularity = Granularity::File;
+            } else if (it->second == "function" || it->second.empty()) {
+                granularity = Granularity::Function;
+            } else {
+                throw CLIError("Invalid --granularity value: '" + it->second +
+                               "'. Use 'function' (default) or 'file'.");
+            }
+        }
+    }
+
+    return {path, similarity, use_duplication_finder_index, llm_max_seq_length,
+            llm_batch_size, llm_model, granularity};
 }
 
-void PreprocessorBuild::preprocess(const fs::path& path, double similarity, size_t use_duplication_finder_index) {
+void PreprocessorBuild::preprocess(const fs::path& path, double similarity, size_t use_duplication_finder_index,
+                                   std::optional<int> llm_max_seq_length,
+                                   std::optional<int> llm_batch_size,
+                                   std::optional<std::string> llm_model,
+                                   Granularity granularity) {
     auto start = std::chrono::high_resolution_clock::now();
 
     fm::write(BREAKER_MESSAGE);
@@ -66,13 +103,14 @@ void PreprocessorBuild::preprocess(const fs::path& path, double similarity, size
     if (fs::exists(base_path)) {
         fs::remove_all(base_path);
     }
-    
-    auto method = MethodsType[use_duplication_finder_index].create(base_path, similarity);
+
+    auto method = MethodsType[use_duplication_finder_index].create(
+        base_path, similarity, llm_max_seq_length, llm_batch_size, llm_model);
 
     FunctionBreaker function_breaker;
     function_breaker.process(path, [&method](const FunctionData& fd) {
         method->on_function(fd);
-    });
+    }, granularity);
 
     fm::write(DUPLICATION_MESSAGE);
 
@@ -99,8 +137,10 @@ PreprocessorBuild::PreprocessorBuild() { }
 PreprocessorBuild::PreprocessorBuild(bool force_preprocess) {
     fs::path base_path = Config::config().base_path / Config::config().name_container;
     if (force_preprocess || !std::filesystem::exists(base_path / CONFIG_PATH)) {
-        auto [path, similarity, use_duplication_finder_index] = read_parameters(std::nullopt);
-        preprocess(path, similarity, use_duplication_finder_index);
+        auto [path, similarity, use_duplication_finder_index,
+              llm_max_seq_length, llm_batch_size, llm_model, granularity] = read_parameters(std::nullopt);
+        preprocess(path, similarity, use_duplication_finder_index,
+                   llm_max_seq_length, llm_batch_size, llm_model, granularity);
     }
 }
 
@@ -126,8 +166,10 @@ bool PreprocessorBuild::validate(const ParsedOptions& options) {
 
 bool PreprocessorBuild::run([[maybe_unused]] const ParsedOptions& options) {
     fs::path base_path = Config::config().base_path / Config::config().name_container;
-    auto [path, similarity, use_duplication_finder_index] = read_parameters(options);
-    preprocess(path, similarity, use_duplication_finder_index);
+    auto [path, similarity, use_duplication_finder_index,
+          llm_max_seq_length, llm_batch_size, llm_model, granularity] = read_parameters(options);
+    preprocess(path, similarity, use_duplication_finder_index,
+               llm_max_seq_length, llm_batch_size, llm_model, granularity);
 
     return true;
 }
